@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>:root{color-scheme:light}body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
-<body>
+<body class="fuori">
 <style>
 /* Layout: una barra di controlli appiccicata in alto, poi fasce di schede su fondo caldo.
    Un solo numero grande (i timbri del periodo); tutto il resto sono schede di pari peso. */
@@ -198,6 +198,16 @@ pre.schema{
   font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; color:var(--ink-2);
 }
 footer{border-top:1px solid var(--line); padding-block:18px 10px; font-size:12.5px; color:var(--ink-3); display:flex; gap:12px; flex-wrap:wrap; justify-content:space-between}
+/* ---------- prima dell'accesso ----------
+   Niente riquadri a zero in attesa: si vede solo l'ingresso.
+   La classe sul body se ne va appena l'accesso è fatto. */
+body.fuori .controlli{display:none}
+body.fuori .bollino{display:none}
+body.fuori main > section.sezione{display:none}
+body.fuori main > footer{display:none}
+body.fuori main{padding-block:12vh 80px}
+body.fuori #barra-stato{max-width:470px; margin-inline:auto}
+body.fuori .pannello-corpo{padding:20px}
 @media (prefers-reduced-motion: reduce){ *{transition:none !important; animation:none !important} }
 </style>
 
@@ -790,6 +800,9 @@ function oraBreve(d){ return d.toLocaleTimeString("it-IT",{hour:"2-digit",minute
 
 function disegnaStato(modo, dati){
   const c = $("#corpo-stato");
+  // Fuori o dentro: prima dell'accesso la pagina mostra solo l'ingresso.
+  document.body.classList.toggle("fuori", modo !== "dentro");
+
   // Con la pagina ancora vuota un riquadro in fondo non lo vede nessuno:
   // finché non si è entrati sta in cima, poi torna in coda.
   const sez = $("#barra-stato"), m = document.querySelector("main");
@@ -814,7 +827,7 @@ function disegnaStato(modo, dati){
     // Primo passo: l'email. Niente password — arriva un codice,
     // come nell'app. shouldCreateUser falso: da qui non nascono account nuovi.
     c.innerHTML =
-      '<p>Scrivi la tua email: ti arriva un codice per entrare.</p>'+
+      '<p><b>I numeri del tuo locale.</b><br>Scrivi l\'email con cui entri in cassa: ti arriva un codice.</p>'+
       '<form id="modulo-email" style="display:flex;gap:9px;flex-wrap:wrap;align-items:center">'+
         '<input id="in-email" type="email" autocomplete="username" inputmode="email" '+
           'placeholder="email" required value="'+esc(emailInCorso||"")+'" '+
