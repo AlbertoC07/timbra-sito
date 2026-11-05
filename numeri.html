@@ -839,7 +839,7 @@ function disegnaStato(modo, dati){
       esito(true, "Sto mandando il codice…");
       const { error } = await s.auth.signInWithOtp({
         email: email, options: { shouldCreateUser: false } });
-      if(error){ esito(false, "Non riesco a mandare il codice: " + error.message); return; }
+      if(error){ esito(false, spiega(error.message)); return; }
       emailInCorso = email;
       disegnaStato("codice");
       esito(true, "Codice mandato a " + email + ". Guarda la posta.");
@@ -867,7 +867,7 @@ function disegnaStato(modo, dati){
       esito(true, "Controllo il codice…");
       const { error } = await s.auth.verifyOtp({
         email: emailInCorso, token: codice, type: "email" });
-      if(error){ esito(false, "Il codice non va: " + error.message); return; }
+      if(error){ esito(false, spiega(error.message)); return; }
       avvia();
     });
     return;
@@ -890,6 +890,22 @@ function disegnaStato(modo, dati){
   });
 }
 
+// I messaggi di Supabase arrivano in inglese e da sviluppatore.
+// Qui davanti c'è un titolare di locale: li traduco in qualcosa di utile.
+function spiega(messaggio){
+  const m = String(messaggio || "").toLowerCase();
+  if(m.includes("signups not allowed"))
+    return "Questo indirizzo non è abilitato. Usa l'email con cui entri in cassa, " +
+           "o scrivi a assistenza@apptimbra.com.";
+  if(m.includes("rate limit") || m.includes("too many"))
+    return "Troppi tentativi ravvicinati. Aspetta qualche minuto e riprova.";
+  if(m.includes("expired") || m.includes("invalid"))
+    return "Codice sbagliato o scaduto. Chiedine uno nuovo.";
+  if(m.includes("failed to fetch") || m.includes("network"))
+    return "Non c'è connessione. Controlla la rete e riprova.";
+  return messaggio;
+}
+
 function esito(ok, testo){
   const e = $("#esito"); if(!e) return;
   e.className = "esito " + (ok?"ok":"ko"); e.textContent = testo;
@@ -910,7 +926,7 @@ async function scarica(silenzioso){
   if(error){
     // I dati già caricati restano a schermo: meglio un numero vecchio dichiarato
     // che una pagina vuota.
-    if(!silenzioso || !ultimoOk) esito(false, "Non riesco a leggere i numeri: " + error.message);
+    if(!silenzioso || !ultimoOk) esito(false, spiega(error.message));
     return;
   }
   const err = validaDati(data);
