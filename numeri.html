@@ -344,7 +344,7 @@ footer{border-top:1px solid var(--line); padding-block:18px 10px; font-size:12.5
   </footer>
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script>
 (function(){
 "use strict";
@@ -771,7 +771,7 @@ const CONFIG = {
   minuti:   30
 };
 
-let sb = null, orologio = null, ultimoOk = null;
+let sb = null, orologio = null, ultimoOk = null, emailInCorso = null;
 
 function configurato(){ return CONFIG.url.indexOf("INCOLLA") !== 0; }
 function cliente(){
@@ -786,27 +786,75 @@ function oraBreve(d){ return d.toLocaleTimeString("it-IT",{hour:"2-digit",minute
 
 function disegnaStato(modo, dati){
   const c = $("#corpo-stato");
+  // Con la pagina ancora vuota un riquadro in fondo non lo vede nessuno:
+  // finché non si è entrati sta in cima, poi torna in coda.
+  const sez = $("#barra-stato"), m = document.querySelector("main");
+  if(sez && m){
+    if(modo === "dentro") m.insertBefore(sez, m.querySelector("footer"));
+    else                  m.insertBefore(sez, m.firstElementChild);
+  }
+  if(modo === "nolib"){
+    c.innerHTML = '<p>Non sono riuscito a caricare la libreria di Supabase. '+
+      'Di solito è la rete: prova a ricaricare la pagina. Se insiste, '+
+      'il problema è l\'indirizzo dello script in fondo al file.</p>';
+    return;
+  }
   if(modo === "nonconfig"){
     c.innerHTML = '<p>Questa pagina non è ancora collegata al database. Apri il file e compila <code>CONFIG.url</code> e <code>CONFIG.anon</code> con Project URL e Publishable key di Supabase.</p>';
     return;
   }
+  const STILE_CAMPO = 'font:inherit;font-size:13.5px;padding:9px 12px;'+
+    'border:1px solid var(--line-forte);border-radius:8px;'+
+    'background:var(--surface);color:var(--ink);';
+
   if(modo === "login"){
+    // Primo passo: l'email. Niente password — arriva un codice,
+    // come nell'app. shouldCreateUser falso: da qui non nascono account nuovi.
     c.innerHTML =
-      '<p>Entra con la tua email per vedere i numeri.</p>'+
-      '<form id="modulo-login" style="display:flex;gap:9px;flex-wrap:wrap;align-items:center">'+
-        '<input id="in-email" type="email" autocomplete="username" placeholder="email" required '+
-          'style="font:inherit;font-size:13.5px;padding:9px 12px;border:1px solid var(--line-forte);border-radius:8px;background:var(--surface);color:var(--ink);min-width:200px">'+
-        '<input id="in-pw" type="password" autocomplete="current-password" placeholder="password" required '+
-          'style="font:inherit;font-size:13.5px;padding:9px 12px;border:1px solid var(--line-forte);border-radius:8px;background:var(--surface);color:var(--ink);min-width:160px">'+
-        '<button class="btn" type="submit">Entra</button>'+
+      '<p>Scrivi la tua email: ti arriva un codice per entrare.</p>'+
+      '<form id="modulo-email" style="display:flex;gap:9px;flex-wrap:wrap;align-items:center">'+
+        '<input id="in-email" type="email" autocomplete="username" inputmode="email" '+
+          'placeholder="email" required value="'+esc(emailInCorso||"")+'" '+
+          'style="'+STILE_CAMPO+'min-width:220px">'+
+        '<button class="btn" type="submit">Mandami il codice</button>'+
       '</form>'+
       '<div class="esito" id="esito"></div>';
-    $("#modulo-login").addEventListener("submit", async ev=>{
+    $("#modulo-email").addEventListener("submit", async ev=>{
       ev.preventDefault();
       const s = cliente(); if(!s) return;
-      const { error } = await s.auth.signInWithPassword({
-        email: $("#in-email").value.trim(), password: $("#in-pw").value });
-      if(error){ esito(false, "Non riesco a entrare: " + error.message); return; }
+      const email = $("#in-email").value.trim();
+      esito(true, "Sto mandando il codice…");
+      const { error } = await s.auth.signInWithOtp({
+        email: email, options: { shouldCreateUser: false } });
+      if(error){ esito(false, "Non riesco a mandare il codice: " + error.message); return; }
+      emailInCorso = email;
+      disegnaStato("codice");
+      esito(true, "Codice mandato a " + email + ". Guarda la posta.");
+    });
+    return;
+  }
+
+  if(modo === "codice"){
+    // Secondo passo: il codice a sei cifre arrivato per email.
+    c.innerHTML =
+      '<p>Ho mandato un codice a <b>'+esc(emailInCorso||"")+'</b>. Scrivilo qui.</p>'+
+      '<form id="modulo-codice" style="display:flex;gap:9px;flex-wrap:wrap;align-items:center">'+
+        '<input id="in-codice" type="text" inputmode="numeric" autocomplete="one-time-code" '+
+          'placeholder="codice" required maxlength="10" '+
+          'style="'+STILE_CAMPO+'min-width:140px;letter-spacing:.18em;font-variant-numeric:tabular-nums">'+
+        '<button class="btn" type="submit">Entra</button>'+
+        '<button class="btn secondario" type="button" id="btn-altra">Cambia email</button>'+
+      '</form>'+
+      '<div class="esito" id="esito"></div>';
+    $("#btn-altra").addEventListener("click", ()=>{ disegnaStato("login"); });
+    $("#modulo-codice").addEventListener("submit", async ev=>{
+      ev.preventDefault();
+      const s = cliente(); if(!s) return;
+      const codice = $("#in-codice").value.trim().replace(/\s/g, "");
+      esito(true, "Controllo il codice…");
+      const { error } = await s.auth.verifyOtp({
+        email: emailInCorso, token: codice, type: "email" });
+      if(error){ esito(false, "Il codice non va: " + error.message); return; }
       avvia();
     });
     return;
@@ -825,7 +873,7 @@ function disegnaStato(modo, dati){
   $("#btn-esci").addEventListener("click", async ()=>{
     const s = cliente(); if(s) await s.auth.signOut();
     scorda(); DATI = datiVuoti(); if(orologio) clearInterval(orologio);
-    costruisciSelettoreLocali(); render(); disegnaStato("login");
+    emailInCorso = null; costruisciSelettoreLocali(); render(); disegnaStato("login");
   });
 }
 
@@ -864,6 +912,7 @@ async function scarica(silenzioso){
 
 async function avvia(){
   if(!configurato()){ disegnaStato("nonconfig"); render(); return; }
+  if(!window.supabase){ disegnaStato("nolib"); render(); return; }
   const s = cliente();
   if(!s){ disegnaStato("nonconfig"); render(); return; }
   const { data:{ session } } = await s.auth.getSession();
