@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /numeri.html
+Disallow: /ilmiolocale.html
+Disallow: /demo-cliente.html
+Disallow: /scarica.html
+Disallow: /giro.html
+
+Sitemap: https://apptimbra.com/sitemap.xml

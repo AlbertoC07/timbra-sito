@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<script>document.documentElement.className+=" js";</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#C0261F">
+<meta name="robots" content="noindex, nofollow">
+<title>Il mio giro</title>
+<link rel="icon" href="img/favicon.png">
+<link rel="stylesheet" href="stile.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+
+<style>
+/* ---------- i quattro colori, uno solo da cambiare se cambi idea ---------- */
+:root{
+  --bianco:#FFFFFF;
+  --giallo:#F2941E;
+  --verde:#2E8B57;
+  --rifiuto:#C0261F;
+}
+.attrezzo{max-width:960px}
+.riga-cerca{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:0 0 14px}
+#cerca{
+  flex:1; min-width:180px; background:var(--carta); color:var(--inchiostro);
+  border:1px solid var(--bordo); border-radius:12px; padding:12px 14px;
+  font-family:inherit; font-size:16px;
+}
+#cerca:focus{outline:2px solid var(--rosso); outline-offset:1px; border-color:transparent}
+
+.filtri{display:flex; gap:7px; flex-wrap:wrap; margin-bottom:16px}
+.filtro{
+  display:inline-flex; align-items:center; gap:7px;
+  border:1px solid var(--bordo); background:var(--carta); color:var(--inchiostro);
+  border-radius:999px; padding:8px 13px; cursor:pointer;
+  font-family:inherit; font-size:14px; font-weight:600;
+}
+.filtro:hover{border-color:var(--rosso)}
+.filtro[aria-pressed="true"]{border-color:var(--rosso); background:var(--crema); color:var(--rosso-scuro)}
+.filtro .conta{font-variant-numeric:tabular-nums; color:var(--grigio); font-weight:700}
+.goccia{width:11px; height:11px; border-radius:50%; border:1.5px solid rgba(0,0,0,.25); flex:none}
+.g-bianco{background:var(--bianco)}
+.g-giallo{background:var(--giallo)}
+.g-verde{background:var(--verde)}
+.g-rosso{background:var(--rifiuto)}
+
+/* da schermo largo: mappa a sinistra che resta ferma, elenco a destra */
+.plancia{display:grid; gap:18px; align-items:start}
+@media(min-width:900px){
+  .attrezzo{max-width:1180px}
+  .plancia{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}
+  .colonna-mappa{position:sticky; top:84px}
+  #mappa{height:min(72vh,620px)}
+}
+.colonna-mappa{min-width:0}
+.colonna-lista{min-width:0}
+#mappa{
+  height:min(52vh,400px); border-radius:var(--raggio); border:1px solid var(--bordo);
+  background:var(--carta); z-index:0;
+}
+.sotto-mappa{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center}
+.io-punto{
+  width:16px; height:16px; border-radius:50%; background:#1F6FEB;
+  border:3px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.25), 0 2px 6px rgba(0,0,0,.4);
+}
+.io-alone{stroke:none}
+#mappa.spenta{
+  display:grid; place-items:center; text-align:center; padding:24px;
+  color:var(--grigio); font-size:15px;
+}
+.leaflet-container{font-family:inherit}
+
+.elenco{display:flex; flex-direction:column; gap:10px}
+.voce{
+  background:var(--carta); border:1px solid var(--bordo); border-radius:var(--raggio);
+  border-left:5px solid var(--bordo); overflow:hidden;
+}
+.voce[data-stato="bianco"]{border-left-color:#CFC6BD}
+.voce[data-stato="giallo"]{border-left-color:var(--giallo)}
+.voce[data-stato="verde"] {border-left-color:var(--verde)}
+.voce[data-stato="rosso"] {border-left-color:var(--rifiuto)}
+.voce-testa{
+  display:flex; align-items:flex-start; gap:11px; padding:13px 15px;
+  cursor:pointer; width:100%; text-align:left; background:none; border:0;
+  font-family:inherit; color:inherit;
+}
+.voce-testa:hover{background:var(--sfondo)}
+.voce-nome{font-size:16.5px; font-weight:700; letter-spacing:-.01em; line-height:1.3}
+.voce-sotto{font-size:13.5px; color:var(--grigio); margin-top:2px; word-break:break-word}
+.voce-corpo{flex:1; min-width:0}
+.distanza{
+  flex:none; margin-top:3px; font-size:13px; font-weight:700; color:var(--grigio);
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.senza-pallino{
+  display:inline-block; margin-top:5px; font-size:12px; font-weight:700;
+  color:var(--rosso-scuro); background:#FEF2F1; border:1px solid #F2D8D5;
+  border-radius:7px; padding:2px 7px;
+}
+.dettaglio{border-top:1px solid var(--bordo); padding:14px 15px 16px}
+.stati{display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px}
+.stato-b{
+  display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+  border:1px solid var(--bordo); background:var(--sfondo); color:var(--inchiostro);
+  border-radius:10px; padding:9px 12px; font-family:inherit; font-size:13.5px; font-weight:600;
+}
+.stato-b[aria-pressed="true"]{border-color:var(--inchiostro); background:var(--carta)}
+textarea.note{
+  width:100%; min-height:100px; resize:vertical;
+  background:var(--sfondo); color:var(--inchiostro);
+  border:1px solid var(--bordo); border-radius:11px; padding:11px 12px;
+  font-family:inherit; font-size:15.5px; line-height:1.5;
+}
+textarea.note:focus{outline:2px solid var(--rosso); outline-offset:1px; border-color:transparent}
+.riga-fine{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:11px}
+.minib{
+  border:1px solid var(--bordo); background:var(--sfondo); color:var(--inchiostro);
+  border-radius:10px; padding:9px 12px; cursor:pointer; text-decoration:none;
+  font-family:inherit; font-size:13.5px; font-weight:600; display:inline-flex; align-items:center;
+}
+.minib:hover{border-color:var(--rosso); color:var(--rosso)}
+.minib.pieno{background:var(--rosso); border-color:var(--rosso); color:#fff}
+.minib.pieno:hover{color:#fff; opacity:.9}
+.quando{font-size:13px; color:var(--grigio); margin-left:auto}
+
+.aggiungi-box{
+  margin-top:20px; background:var(--carta); border:1px solid var(--bordo);
+  border-radius:var(--raggio); padding:15px 16px;
+}
+.aggiungi-box h2{font-size:16px; margin:0 0 12px}
+.campi{display:grid; gap:9px; grid-template-columns:1fr 1fr}
+.campi input{
+  width:100%; background:var(--sfondo); color:var(--inchiostro);
+  border:1px solid var(--bordo); border-radius:10px; padding:11px 12px;
+  font-family:inherit; font-size:15.5px;
+}
+.campi input:focus{outline:2px solid var(--rosso); outline-offset:1px; border-color:transparent}
+.campi .lungo{grid-column:1 / -1}
+.aggiungi-box button{
+  margin-top:11px; border:0; border-radius:11px; background:var(--rosso); color:#fff;
+  font-family:inherit; font-size:15.5px; font-weight:700; padding:13px 22px; cursor:pointer;
+}
+.aggiungi-box button:disabled{opacity:.45; cursor:default}
+
+.avviso{
+  background:var(--crema); border:1px solid #F0DCC0; border-radius:11px;
+  padding:11px 14px; font-size:14.5px; margin:12px 0; color:var(--inchiostro);
+}
+.avviso.male{background:#FEF2F1; border-color:#F2D8D5; color:var(--rosso-scuro)}
+.vuoto-el{
+  background:var(--carta); border:1px dashed var(--bordo); border-radius:var(--raggio);
+  padding:28px 20px; text-align:center; color:var(--grigio);
+}
+#entra .campi{grid-template-columns:1fr}
+@media(max-width:560px){ .campi{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<div class="barra"><div class="barra-dentro">
+  <a class="logo" href="index.html"><img src="img/logo.png" alt="Timbra" width="160" height="30"></a>
+  <button class="apri-menu" id="apri-menu" aria-expanded="false" aria-controls="menu" aria-label="Apri il menu">
+    <span></span><span></span><span></span>
+  </button>
+  <nav class="menu" id="menu">
+    <a href="index.html">Home</a>
+    <a href="per-i-locali.html">Per i locali</a>
+    <a href="giro.html" class="qui">Il mio giro</a>
+    <a href="#" id="esci-link" hidden>Esci</a>
+  </nav>
+</div></div>
+
+<div class="wrap attrezzo" style="padding-block:26px 70px">
+
+  <h1 style="font-size:clamp(26px,4vw,34px)">Il mio giro</h1>
+  <p class="occhio" style="margin:10px 0 22px">Dove sono stato, com'&egrave; finita, chi devo ripassare.</p>
+
+  <!-- ===================== login ===================== -->
+  <section id="entra">
+    <div class="avviso" id="entra-msg">Controllo se sei gi&agrave; collegato&hellip;</div>
+    <div class="aggiungi-box" id="entra-box" hidden>
+      <h2>Entra</h2>
+      <form id="form-email">
+        <div class="campi">
+          <input id="in-email" type="email" placeholder="La tua email" autocomplete="email" required>
+        </div>
+        <button type="submit">Mandami il codice</button>
+      </form>
+      <form id="form-codice" hidden>
+        <div class="campi">
+          <input id="in-codice" type="text" inputmode="numeric" autocomplete="one-time-code"
+                 placeholder="Codice a sei cifre" maxlength="10" required
+                 style="letter-spacing:.18em; font-variant-numeric:tabular-nums">
+        </div>
+        <button type="submit">Entra</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===================== applicazione ===================== -->
+  <section id="app" hidden>
+
+    <div class="riga-cerca">
+      <input id="cerca" type="search" placeholder="Cerca un locale, una via, una parola nelle note&hellip;" autocomplete="off">
+    </div>
+
+    <div class="filtri" id="filtri"></div>
+
+    <div class="plancia">
+      <div class="colonna-mappa">
+        <div id="mappa"></div>
+        <div class="sotto-mappa">
+          <button class="minib" type="button" id="btn-vicino" aria-pressed="false">Qui vicino</button>
+          <button class="minib" type="button" id="btn-io">Centra su di me</button>
+          <button class="minib" type="button" id="btn-tutti">Vedi tutti</button>
+          <span id="gps-msg" style="font-size:13px;color:var(--grigio)"></span>
+        </div>
+      </div>
+      <div class="colonna-lista">
+        <div class="elenco" id="elenco"></div>
+      </div>
+    </div>
+
+    <div class="aggiungi-box">
+      <h2>Aggiungi un locale</h2>
+      <div class="campi">
+        <input id="n-nome" class="lungo" placeholder="Nome del locale" autocomplete="off">
+        <input id="n-indirizzo" placeholder="Via e numero" autocomplete="off">
+        <input id="n-citta" placeholder="Citt&agrave;" autocomplete="off">
+      </div>
+      <button id="n-aggiungi" disabled>Aggiungi</button>
+      <div id="n-msg"></div>
+    </div>
+  </section>
+</div>
+
+<footer>
+<div class="wrap">
+  <div class="piede-logo"><img src="img/logo.png" alt="Timbra" width="139" height="26"></div>
+  Pagina privata. La vede solo chi entra con la tua email.
+</div>
+</footer>
+
+<script src="sito.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* ===== le due righe del progetto: stesse di numeri.html ===== */
+  const CONFIG = {
+    url:  "https://obmxkjfoyaasljkkobuz.supabase.co",
+    anon: "sb_publishable_hbr3uqvLMW0Hvhnr6EVLJg_DCcczCa9",
+
+    /* >>> SCRIVI QUI LA TUA EMAIL <<<
+       Solo queste email possono entrare in questa pagina. Lasciarla vuota
+       non apre le porte a nessuno (le righe restano tue per via delle RLS),
+       ma tanto vale chiuderla anche qui. */
+    emailAmmesse: ["alberto.ciullo07@gmail.com"],
+  };
+  const ammessa = (e) =>
+    CONFIG.emailAmmesse.some((x) => String(x).trim().toLowerCase() === String(e || "").trim().toLowerCase());
+
+  const STATI = [
+    { id:"bianco", nome:"Da passare",   colore:"#CFC6BD", pieno:"#FFFFFF" },
+    { id:"giallo", nome:"Da ripassare", colore:"#C97A12", pieno:"#F2941E" },
+    { id:"verde",  nome:"Attivo",       colore:"#1F5F3B", pieno:"#2E8B57" },
+    { id:"rosso",  nome:"Ha rifiutato", colore:"#8E1B16", pieno:"#C0261F" },
+  ];
+  const statoDi = (id) => STATI.find((s) => s.id === id) || STATI[0];
+
+  const $ = (s) => document.querySelector(s);
+  const esc = (t) => String(t == null ? "" : t);
+
+  let sb = null, mappa = null, strato = null, pallini = {};
+  let righe = [], aperta = null, filtro = "tutti", cerca = "";
+  let inAttesaDiClic = null;      // id del locale a cui mettere il pallino a mano
+  let emailInCorso = null;
+  let io = null, ioAlone = null, ioPos = null, seguimi = true, guardia = null;
+  let vicino = false;
+
+  function cliente() {
+    if (sb) return sb;
+    if (!window.supabase) return null;
+    sb = window.supabase.createClient(CONFIG.url, CONFIG.anon, {
+      auth: { persistSession: true, autoRefreshToken: true },
+    });
+    return sb;
+  }
+
+  function dillo(testo, male) {
+    const d = $("#entra-msg");
+    d.textContent = testo;
+    d.className = "avviso" + (male ? " male" : "");
+    d.hidden = !testo;
+  }
+  function spiega(m) {
+    m = String(m || "");
+    if (/Signups not allowed|not found|Invalid login/i.test(m))
+      return "Email non riconosciuta. Usa quella con cui entri in Supabase.";
+    if (/expired|invalid/i.test(m)) return "Codice sbagliato o scaduto. Richiedine un altro.";
+    if (/rate|too many/i.test(m)) return "Troppi tentativi. Aspetta un minuto.";
+    return m;
+  }
+
+  /* =============================== login =============================== */
+  $("#form-email").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const s = cliente(); if (!s) return dillo("Manca la libreria di Supabase: ricarica la pagina.", true);
+    const email = $("#in-email").value.trim();
+    if (!ammessa(email)) return dillo("Questa pagina è solo per l'email del titolare di Timbra.", true);
+    dillo("Sto mandando il codice…");
+    const { error } = await s.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+    if (error) return dillo(spiega(error.message), true);
+    emailInCorso = email;
+    $("#form-email").hidden = true;
+    $("#form-codice").hidden = false;
+    $("#in-codice").focus();
+    dillo("Codice mandato a " + email + ". Guarda la posta.");
+  });
+
+  $("#form-codice").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const s = cliente(); if (!s) return;
+    const token = $("#in-codice").value.trim().replace(/\s/g, "");
+    dillo("Controllo il codice…");
+    const { error } = await s.auth.verifyOtp({ email: emailInCorso, token, type: "email" });
+    if (error) return dillo(spiega(error.message), true);
+    avvia();
+  });
+
+  $("#esci-link").addEventListener("click", async (e) => {
+    e.preventDefault();
+    const s = cliente(); if (s) await s.auth.signOut();
+    location.reload();
+  });
+
+  /* =============================== dati =============================== */
+  async function scarica() {
+    const s = cliente(); if (!s) return;
+    const { data, error } = await s.from("giro_visite").select("*").order("nome");
+    if (error) { dillo("Non riesco a leggere l'elenco: " + error.message, true); return; }
+    righe = data || [];
+    disegna();
+    righe.filter((r) => r.lat == null && r.indirizzo).forEach(coda);
+  }
+
+  async function salva(r, campi) {
+    Object.assign(r, campi);
+    disegna();
+    const s = cliente(); if (!s) return;
+    const { error } = await s.from("giro_visite").update(campi).eq("id", r.id);
+    if (error) console.warn("salvataggio:", error.message);
+  }
+
+  async function cancella(r) {
+    righe = righe.filter((x) => x.id !== r.id);
+    if (pallini[r.id]) { strato.removeLayer(pallini[r.id]); delete pallini[r.id]; }
+    disegna();
+    const s = cliente(); if (!s) return;
+    await s.from("giro_visite").delete().eq("id", r.id);
+  }
+
+  async function aggiungi() {
+    const nome = $("#n-nome").value.trim();
+    if (!nome) return;
+    const indirizzo = $("#n-indirizzo").value.trim();
+    const citta = $("#n-citta").value.trim();
+    const gemello = righe.find((r) => r.nome.toLowerCase() === nome.toLowerCase());
+    const s = cliente(); if (!s) return;
+
+    $("#n-aggiungi").disabled = true;
+    const { data, error } = await s
+      .from("giro_visite")
+      .insert({ nome, indirizzo: indirizzo || null, citta: citta || null, stato: "bianco" })
+      .select()
+      .single();
+    if (error) {
+      $("#n-msg").innerHTML = '<div class="avviso male">Non l\'ho salvato: ' + esc(error.message) + "</div>";
+      $("#n-aggiungi").disabled = false;
+      return;
+    }
+    righe.push(data);
+    $("#n-nome").value = ""; $("#n-indirizzo").value = ""; $("#n-citta").value = "";
+    $("#n-msg").innerHTML = gemello
+      ? '<div class="avviso">Attento: ne avevi già uno che si chiama così.</div>' : "";
+    disegna();
+    if (indirizzo || citta) coda(data);
+  }
+
+  /* ========================= indirizzo -> pallino ====================== */
+  /* Nominatim e' gratis ma chiede garbo: una richiesta per volta, e una
+     sola per locale. La posizione trovata la salviamo, cosi' non si
+     ricerca mai due volte la stessa cosa. */
+  const fila = [];
+  let filaInCorso = false;
+
+  function coda(r) {
+    if (!r || r.lat != null) return;
+    if (fila.some((x) => x.id === r.id)) return;
+    fila.push(r);
+    if (!filaInCorso) giraFila();
+  }
+
+  async function giraFila() {
+    filaInCorso = true;
+    while (fila.length) {
+      const r = fila.shift();
+      try { await trova(r); } catch (e) { /* si prosegue */ }
+      await new Promise((ok) => setTimeout(ok, 1200));
+    }
+    filaInCorso = false;
+  }
+
+  async function trova(r) {
+    const q = [r.indirizzo, r.citta, "Italia"].filter(Boolean).join(", ");
+    if (!q) return;
+    const url = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=it&q="
+              + encodeURIComponent(q);
+    const risp = await fetch(url, { headers: { "Accept": "application/json" } });
+    if (!risp.ok) return;
+    const out = await risp.json();
+    if (!out || !out.length) { r.nonTrovato = true; disegna(); return; }
+    await salva(r, { lat: parseFloat(out[0].lat), lon: parseFloat(out[0].lon) });
+  }
+
+  /* =============================== mappa =============================== */
+  function avviaMappa() {
+    if (!window.L) {
+      const m = $("#mappa");
+      m.className = "spenta";
+      m.textContent = "La mappa non si è caricata (sei senza linea?). L'elenco qui sotto funziona lo stesso.";
+      return;
+    }
+    // Si apre sull'Italia intera, poi se il telefono dice dove sei ci va sopra.
+    mappa = L.map("mappa", { scrollWheelZoom: false }).setView([42.5, 12.5], 5);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap",
+    }).addTo(mappa);
+    strato = L.layerGroup().addTo(mappa);
+    mappa.on("click", (e) => {
+      if (!inAttesaDiClic) return;
+      const r = righe.find((x) => x.id === inAttesaDiClic);
+      inAttesaDiClic = null;
+      if (r) salva(r, { lat: e.latlng.lat, lon: e.latlng.lng, nonTrovato: false });
+    });
+    // se trascini la mappa, smetto di inseguirti: comandi tu
+    mappa.on("dragstart", () => { seguimi = false; });
+    avviaGps();
+  }
+
+  /* ---------------------- dove sono io, adesso ---------------------- */
+  function gpsMsg(t) { const e = $("#gps-msg"); if (e) e.textContent = t || ""; }
+
+  function avviaGps() {
+    if (!navigator.geolocation) { gpsMsg("Questo telefono non dà la posizione."); return; }
+    gpsMsg("Cerco dove sei…");
+    guardia = navigator.geolocation.watchPosition(
+      (p) => {
+        const { latitude: la, longitude: lo, accuracy: pr } = p.coords;
+        const primo = !ioPos;
+        ioPos = [la, lo];
+        gpsMsg(pr > 120 ? "Posizione approssimata (±" + Math.round(pr) + " m)" : "");
+        if (!mappa) return;
+        if (!io) {
+          ioAlone = L.circle(ioPos, { radius: pr, color: "#1F6FEB", weight: 1,
+                                      fillColor: "#1F6FEB", fillOpacity: .1 }).addTo(mappa);
+          io = L.circleMarker(ioPos, { radius: 8, weight: 3, color: "#fff",
+                                       fillColor: "#1F6FEB", fillOpacity: 1 }).addTo(mappa);
+          io.bindTooltip("Sei qui", { direction: "top" });
+        } else {
+          io.setLatLng(ioPos); ioAlone.setLatLng(ioPos); ioAlone.setRadius(pr);
+        }
+        if (primo) mappa.setView(ioPos, 15);
+        else if (seguimi) mappa.panTo(ioPos, { animate: true });
+      },
+      (err) => {
+        gpsMsg(err.code === 1
+          ? "Posizione non concessa: la mappa parte dall'Italia."
+          : "Non riesco a prendere la posizione.");
+      },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+    );
+  }
+
+  function disegnaMappa(visibili) {
+    if (!mappa || !strato) return;
+    strato.clearLayers();
+    pallini = {};
+    const punti = [];
+    visibili.forEach((r) => {
+      if (r.lat == null || r.lon == null) return;
+      const s = statoDi(r.stato);
+      const p = L.circleMarker([r.lat, r.lon], {
+        radius: 9, weight: 2.5, color: s.colore, fillColor: s.pieno, fillOpacity: 1,
+      }).addTo(strato);
+      p.bindTooltip(r.nome, { direction: "top" });
+      p.on("click", () => { aperta = r.id; disegna();
+        const el = document.getElementById("voce-" + r.id);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      pallini[r.id] = p;
+      punti.push([r.lat, r.lon]);
+    });
+    if (punti.length && inquadra) {
+      inquadra = false;
+      mappa.fitBounds(punti, { padding: [36, 36], maxZoom: 15 });
+    }
+  }
+  let inquadra = false;
+
+  /* =============================== disegno ============================= */
+  /* Ricerca a pezzi di parola: "dock", "do", "piazza dock", "napoli riv"
+     trovano tutte "Napoli Pizza Dock, Via Piave, Rivoli". Ogni pezzo che
+     scrivi deve comparire da qualche parte fra nome, indirizzo, citta' e
+     note. Accenti e maiuscole non contano. */
+  const norm = (s) => String(s == null ? "" : s)
+    .toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+  function filtrate() {
+    const pezzi = norm(cerca).split(/\s+/).filter(Boolean);
+    let out = righe.filter((r) => {
+      if (filtro !== "tutti" && r.stato !== filtro) return false;
+      if (!pezzi.length) return true;
+      const fieno = norm([r.nome, r.indirizzo, r.citta, r.note].filter(Boolean).join(" "));
+      return pezzi.every((p) => fieno.includes(p));
+    });
+    if (vicino && ioPos) {
+      out = out.slice().sort((a, b) => {
+        const da = distanza(a), db2 = distanza(b);
+        if (da == null && db2 == null) return a.nome.localeCompare(b.nome);
+        if (da == null) return 1;
+        if (db2 == null) return -1;
+        return da - db2;
+      });
+    }
+    return out;
+  }
+
+  /* quanti metri ci sono da dove sei adesso */
+  function distanza(r) {
+    if (!ioPos || r.lat == null || r.lon == null) return null;
+    const R = 6371000, g = Math.PI / 180;
+    const d1 = (r.lat - ioPos[0]) * g, d2 = (r.lon - ioPos[1]) * g;
+    const a = Math.sin(d1 / 2) ** 2 +
+              Math.cos(ioPos[0] * g) * Math.cos(r.lat * g) * Math.sin(d2 / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+  }
+  function quantoLontano(m) {
+    if (m == null) return "";
+    if (m < 950) return Math.round(m / 10) * 10 + " m";
+    return (m / 1000).toFixed(1).replace(".", ",") + " km";
+  }
+
+  function disegnaFiltri() {
+    const box = $("#filtri");
+    box.textContent = "";
+    const voci = [{ id: "tutti", nome: "Tutti" }].concat(STATI);
+    voci.forEach((v) => {
+      const n = v.id === "tutti" ? righe.length : righe.filter((r) => r.stato === v.id).length;
+      const b = document.createElement("button");
+      b.className = "filtro";
+      b.type = "button";
+      b.setAttribute("aria-pressed", filtro === v.id ? "true" : "false");
+      if (v.id !== "tutti") {
+        const g = document.createElement("span");
+        g.className = "goccia g-" + v.id;
+        b.append(g);
+      }
+      b.append(document.createTextNode(v.nome + " "));
+      const c = document.createElement("span");
+      c.className = "conta"; c.textContent = n;
+      b.append(c);
+      b.addEventListener("click", () => { filtro = v.id; disegna(); });
+      box.append(b);
+    });
+  }
+
+  function disegna() {
+    disegnaFiltri();
+    const visibili = filtrate();
+    const el = $("#elenco");
+    el.textContent = "";
+
+    if (!visibili.length) {
+      const v = document.createElement("div");
+      v.className = "vuoto-el";
+      v.textContent = righe.length
+        ? "Nessun locale con questo filtro."
+        : "Ancora nessun locale. Aggiungine uno qui sotto: nome, via e città, e il pallino si piazza da solo.";
+      el.append(v);
+    } else {
+      visibili.forEach((r) => el.append(voce(r)));
+    }
+    disegnaMappa(visibili);
+  }
+
+  function voce(r) {
+    const w = document.createElement("div");
+    w.className = "voce";
+    w.id = "voce-" + r.id;
+    w.dataset.stato = r.stato;
+
+    const testa = document.createElement("button");
+    testa.className = "voce-testa";
+    testa.type = "button";
+    const g = document.createElement("span");
+    g.className = "goccia g-" + r.stato;
+    g.style.marginTop = "6px";
+    const corpo = document.createElement("div");
+    corpo.className = "voce-corpo";
+    const nome = document.createElement("div");
+    nome.className = "voce-nome";
+    nome.textContent = r.nome;
+    corpo.append(nome);
+    const sotto = document.createElement("div");
+    sotto.className = "voce-sotto";
+    sotto.textContent = [r.indirizzo, r.citta].filter(Boolean).join(" · ")
+      || "senza indirizzo";
+    corpo.append(sotto);
+    if (r.lat == null) {
+      const p = document.createElement("span");
+      p.className = "senza-pallino";
+      p.textContent = "non sulla mappa";
+      corpo.append(p);
+    }
+    testa.append(g, corpo);
+    const met = distanza(r);
+    if (met != null) {
+      const d2 = document.createElement("span");
+      d2.className = "distanza";
+      d2.textContent = quantoLontano(met);
+      testa.append(d2);
+    }
+    testa.addEventListener("click", () => { aperta = aperta === r.id ? null : r.id; disegna(); });
+    w.append(testa);
+
+    if (aperta !== r.id) return w;
+
+    const d = document.createElement("div");
+    d.className = "dettaglio";
+
+    const stati = document.createElement("div");
+    stati.className = "stati";
+    STATI.forEach((s) => {
+      const b = document.createElement("button");
+      b.className = "stato-b";
+      b.type = "button";
+      b.setAttribute("aria-pressed", r.stato === s.id ? "true" : "false");
+      const gg = document.createElement("span");
+      gg.className = "goccia g-" + s.id;
+      b.append(gg, document.createTextNode(s.nome));
+      b.addEventListener("click", () => {
+        const oggi = new Date();
+        const z = new Date(oggi.getTime() - oggi.getTimezoneOffset() * 60000);
+        salva(r, { stato: s.id, ultima_visita: s.id === "bianco" ? r.ultima_visita : z.toISOString().slice(0, 10) });
+      });
+      stati.append(b);
+    });
+    d.append(stati);
+
+    const note = document.createElement("textarea");
+    note.className = "note";
+    note.id = "note-" + r.id;
+    note.placeholder = "Chi hai trovato, cosa ti ha chiesto, com'è finita, quando torni…";
+    note.value = r.note || "";
+    let t = null;
+    note.addEventListener("input", () => {
+      r.note = note.value;
+      clearTimeout(t);
+      t = setTimeout(() => { const s = cliente(); if (s) s.from("giro_visite").update({ note: note.value }).eq("id", r.id); }, 800);
+    });
+    d.append(note);
+
+    const fine = document.createElement("div");
+    fine.className = "riga-fine";
+
+    const q = encodeURIComponent([r.nome, r.indirizzo, r.citta].filter(Boolean).join(" "));
+    const maps = document.createElement("a");
+    maps.className = "minib pieno";
+    maps.href = "https://www.google.com/maps/search/?api=1&query=" + q;
+    maps.target = "_blank"; maps.rel = "noopener";
+    maps.textContent = "Apri in Maps";
+    fine.append(maps);
+
+    if (r.lat == null) {
+      const riprova = document.createElement("button");
+      riprova.className = "minib"; riprova.type = "button";
+      riprova.textContent = "Cerca sulla mappa";
+      riprova.addEventListener("click", () => { r.nonTrovato = false; coda(r); riprova.textContent = "Cerco…"; });
+      fine.append(riprova);
+    }
+
+    const qui = document.createElement("button");
+    qui.className = "minib"; qui.type = "button";
+    qui.textContent = "Il pallino dove sono adesso";
+    qui.addEventListener("click", () => {
+      if (!ioPos) { qui.textContent = "Non so ancora dove sei"; return; }
+      salva(r, { lat: ioPos[0], lon: ioPos[1] });
+    });
+    fine.append(qui);
+
+    const aMano = document.createElement("button");
+    aMano.className = "minib"; aMano.type = "button";
+    aMano.textContent = "Metti il pallino a mano";
+    aMano.addEventListener("click", () => {
+      inAttesaDiClic = r.id;
+      aMano.textContent = "Tocca il punto sulla mappa";
+      if (mappa) document.getElementById("mappa").scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    fine.append(aMano);
+
+    const via = document.createElement("button");
+    via.className = "minib"; via.type = "button";
+    via.textContent = "Elimina";
+    via.addEventListener("click", () => {
+      if (via.dataset.ok === "1") { cancella(r); return; }
+      via.dataset.ok = "1"; via.textContent = "Sicuro? Tocca ancora";
+      setTimeout(() => { if (via.isConnected) { via.dataset.ok = ""; via.textContent = "Elimina"; } }, 4000);
+    });
+    fine.append(via);
+
+    if (r.ultima_visita) {
+      const q2 = document.createElement("span");
+      q2.className = "quando";
+      const [a, m, g2] = r.ultima_visita.split("-");
+      q2.textContent = "ultima visita " + g2 + "/" + m;
+      fine.append(q2);
+    }
+
+    d.append(fine);
+    w.append(d);
+    return w;
+  }
+
+  /* =============================== avvio =============================== */
+  $("#btn-vicino").addEventListener("click", () => {
+    if (!ioPos) { gpsMsg("Ancora non so dove sei: accendi la posizione."); return; }
+    vicino = !vicino;
+    $("#btn-vicino").setAttribute("aria-pressed", vicino ? "true" : "false");
+    $("#btn-vicino").classList.toggle("pieno", vicino);
+    disegna();
+  });
+  $("#btn-io").addEventListener("click", () => {
+    seguimi = true;
+    if (ioPos && mappa) mappa.setView(ioPos, 16);
+    else gpsMsg("Ancora non so dove sei. Controlla che la posizione sia accesa.");
+  });
+  $("#btn-tutti").addEventListener("click", () => {
+    seguimi = false; inquadra = true; disegna();
+  });
+
+  $("#cerca").addEventListener("input", (e) => { cerca = e.target.value; disegna(); });
+  $("#n-nome").addEventListener("input", () => { $("#n-aggiungi").disabled = !$("#n-nome").value.trim(); });
+  $("#n-aggiungi").addEventListener("click", aggiungi);
+  ["#n-nome", "#n-indirizzo", "#n-citta"].forEach((s) =>
+    $(s).addEventListener("keydown", (e) => { if (e.key === "Enter") aggiungi(); }));
+
+  function avvia() {
+    $("#entra").hidden = true;
+    $("#app").hidden = false;
+    $("#esci-link").hidden = false;
+    avviaMappa();
+    scarica();
+  }
+
+  (async () => {
+    const s = cliente();
+    if (!s) { dillo("Manca la libreria di Supabase: controlla la linea e ricarica.", true); return; }
+    const { data } = await s.auth.getSession();
+    const chi = data && data.session && data.session.user && data.session.user.email;
+    if (chi && ammessa(chi)) { avvia(); return; }
+    if (chi) {
+      await s.auth.signOut();
+      dillo("Questa pagina è solo per l'email del titolare di Timbra.", true);
+    } else {
+      dillo("");
+    }
+    $("#entra-box").hidden = false;
+  })();
+})();
+</script>
+</body>
+</html>
