@@ -62,14 +62,14 @@
 /* Le tessere arrivano da OpenStreetMap, che è libero e senza chiavi.
    Lo scolorimento lo facciamo qui, sul disegnato: le strade restano
    grigie e quiete, e i pallini colorati sopra non vengono toccati. */
+/* Mappa bianca sempre, anche se l'iPad è in modalità scura: sotto resta
+   il bianco del riquadro e le tessere ci si appoggiano sopra slavate,
+   così restano solo le strade come righe grigie leggere. */
 .leaflet-tile-pane{
-  filter:grayscale(.88) saturate(.55) brightness(1.07) contrast(.9);
+  filter:grayscale(1) brightness(1.14) contrast(.78);
+  opacity:.88;
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]) .leaflet-tile-pane{
-    filter:grayscale(.95) invert(1) brightness(.92) contrast(.88) hue-rotate(180deg);
-  }
-}
+#mappa{background:#FFFFFF !important}
 
 /* il tasto per ingrandire, e la mappa a tutto schermo */
 #mappa.grande{
