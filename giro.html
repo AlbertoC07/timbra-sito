@@ -208,6 +208,21 @@ textarea.note:focus{outline:2px solid var(--rosso); outline-offset:1px; border-c
 .giorno.dom{background:#FFF7EC; color:#9A5B06}
 .giorni{display:flex; gap:7px; flex-wrap:wrap; margin-bottom:11px}
 .giorni .minib[aria-pressed="true"]{border-color:var(--rosso); background:var(--crema); color:var(--rosso-scuro)}
+.pos{
+  flex:none; width:23px; height:23px; border-radius:50%;
+  background:var(--rosso); color:#fff; font-size:12.5px; font-weight:800;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-variant-numeric:tabular-nums; margin-top:3px;
+}
+.giorni .numero{
+  display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--grigio);
+  font-weight:600;
+}
+.giorni .numero input{
+  width:62px; border:1px solid var(--bordo); background:var(--carta); color:var(--inchiostro);
+  border-radius:999px; padding:7px 10px; font-family:inherit; font-size:13.5px; font-weight:700;
+  text-align:center;
+}
 .giorni input[type="date"]{
   border:1px solid var(--bordo); background:var(--carta); color:var(--inchiostro);
   border-radius:999px; padding:7px 12px; font-family:inherit; font-size:13.5px; font-weight:600;
@@ -653,6 +668,16 @@ textarea.note:focus{outline:2px solid var(--rosso); outline-offset:1px; border-c
       const fieno = norm([r.nome, r.indirizzo, r.citta, r.note].filter(Boolean).join(" "));
       return pezzi.every((p) => fieno.includes(p));
     });
+    /* dentro la lista di un giorno comanda l'ordine che hai deciso tu:
+       primo, secondo, terzo. Chi non ha un numero va in fondo, per nome. */
+    if (filtro === "oggi" || filtro === "domani") {
+      out = out.slice().sort((a, b) => {
+        const oa = a.ordine == null ? 9999 : a.ordine;
+        const ob = b.ordine == null ? 9999 : b.ordine;
+        if (oa !== ob) return oa - ob;
+        return a.nome.localeCompare(b.nome);
+      });
+    }
     if (vicino && ioPos) {
       out = out.slice().sort((a, b) => {
         const da = distanza(a), db2 = distanza(b);
@@ -737,9 +762,15 @@ textarea.note:focus{outline:2px solid var(--rosso); outline-offset:1px; border-c
     const testa = document.createElement("button");
     testa.className = "voce-testa";
     testa.type = "button";
+    const inGiornata = (filtro === "oggi" || filtro === "domani");
     const g = document.createElement("span");
-    g.className = "goccia g-" + r.stato;
-    g.style.marginTop = "6px";
+    if (inGiornata && r.ordine != null) {
+      g.className = "pos";
+      g.textContent = r.ordine;
+    } else {
+      g.className = "goccia g-" + r.stato;
+      g.style.marginTop = "6px";
+    }
     const corpo = document.createElement("div");
     corpo.className = "voce-corpo";
     const nome = document.createElement("div");
@@ -809,6 +840,19 @@ textarea.note:focus{outline:2px solid var(--rosso); outline-offset:1px; border-c
       b.addEventListener("click", () => salva(r, { giorno: r.giorno === val ? null : val }));
       gio.append(b);
     });
+    const num = document.createElement("label");
+    num.className = "numero";
+    num.append(document.createTextNode("n°"));
+    const ni = document.createElement("input");
+    ni.type = "number"; ni.min = "1"; ni.step = "1"; ni.inputMode = "numeric";
+    ni.value = r.ordine == null ? "" : r.ordine;
+    ni.addEventListener("change", () => {
+      const v = ni.value.trim() === "" ? null : Math.max(1, parseInt(ni.value, 10) || 1);
+      salva(r, { ordine: v });
+    });
+    num.append(ni);
+    gio.append(num);
+
     const data = document.createElement("input");
     data.type = "date";
     data.value = r.giorno || "";
