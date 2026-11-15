@@ -208,6 +208,22 @@ body.fuori main > footer{display:none}
 body.fuori main{padding-block:12vh 80px}
 body.fuori #barra-stato{max-width:470px; margin-inline:auto}
 body.fuori .pannello-corpo{padding:20px}
+
+/* ---------- 15 novembre: più numeri nell'eroe, unità, premi da ritirare, colonne ---------- */
+.eroe-numeri{display:flex; gap:22px 40px; flex-wrap:wrap; align-items:flex-end}
+.eroe-numeri .secondo .eroe-num{font-size:clamp(34px,6vw,48px); color:var(--ink-2)}
+.eroe-dove{font-size:12px; color:var(--ink-3); margin-top:6px}
+.segmenti.piccoli button{font-size:12.5px; padding:5px 12px}
+.premi-lista{display:flex; flex-direction:column; gap:0}
+.premio-riga{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 16px; align-items:baseline;
+  padding:13px 0; border-bottom:1px solid var(--line)}
+.premio-riga:first-child{padding-top:0}
+.premio-riga:last-child{border-bottom:0; padding-bottom:0}
+.premio-nome{font-size:14px; font-weight:600; min-width:0; overflow-wrap:anywhere}
+.premio-cosa{grid-column:1 / -1; font-size:12.5px; color:var(--ink-3); margin-top:-2px}
+.premio-val{font-size:26px; font-weight:600; letter-spacing:-.02em; font-variant-numeric:tabular-nums; text-align:right}
+.premio-val small{font-size:12.5px; font-weight:500; color:var(--ink-3); letter-spacing:0; margin-left:4px}
+.premio-val.zero{color:var(--ink-3)}
 @media (prefers-reduced-motion: reduce){ *{transition:none !important; animation:none !important} }
 </style>
 
@@ -259,9 +275,8 @@ body.fuori .pannello-corpo{padding:20px}
     </div>
 
     <div class="scheda eroe">
-      <div>
-        <div class="eroe-et">Timbri assegnati</div>
-        <div class="eroe-num" id="eroe-timbri">—</div>
+      <div class="eroe-numeri" id="eroe-numeri">
+        <div><div class="eroe-et">Timbri assegnati</div><div class="eroe-num">—</div></div>
       </div>
       <p class="eroe-sotto" id="eroe-sotto"></p>
     </div>
@@ -272,6 +287,8 @@ body.fuori .pannello-corpo{padding:20px}
       <div class="sezione-testa" style="margin-bottom:14px">
         <h2 id="titolo-andamento">Andamento</h2>
         <p class="sezione-nota" id="nota-andamento"></p>
+        <span class="testa-spazio"></span>
+        <div class="segmenti piccoli" id="sel-unita" role="group" aria-label="Cosa mostrare" hidden></div>
       </div>
       <div class="grafico-box" id="box-andamento">
         <div class="suggerimento" id="sugg-andamento"></div>
@@ -280,6 +297,15 @@ body.fuori .pannello-corpo{padding:20px}
         <div class="tab-wrap" id="tab-andamento"></div>
       </details>
     </div>
+  </section>
+
+  <!-- PREMI DA RITIRARE -->
+  <section class="sezione">
+    <div class="sezione-testa">
+      <h2>Premi da ritirare</h2>
+      <p class="sezione-nota">Adesso, non nel periodo scelto: premi già maturati che i clienti non hanno ancora ritirato.</p>
+    </div>
+    <div class="scheda"><div class="premi-lista" id="premi-pronti"></div></div>
   </section>
 
   <!-- NOTIFICHE -->
@@ -326,7 +352,7 @@ body.fuori .pannello-corpo{padding:20px}
       <div class="eroe-et" style="margin-bottom:12px">Quante tessere sono condivise</div>
       <div class="segmentata" id="seg-famiglia"></div>
       <div class="legenda" id="leg-famiglia"></div>
-      <div style="margin-top:20px" class="eroe-et">Timbri a settimana per tessera</div>
+      <div style="margin-top:20px" class="eroe-et" id="et-famiglia">Timbri a settimana per tessera</div>
       <div class="barre" id="barre-famiglia" style="margin-top:12px"></div>
       <details class="tab"><summary>Vedi i valori in tabella</summary>
         <div class="tab-wrap" id="tab-famiglia"></div>
@@ -338,7 +364,7 @@ body.fuori .pannello-corpo{padding:20px}
   <section class="sezione">
     <div class="sezione-testa">
       <h2>Effetto delle promozioni</h2>
-      <p class="sezione-nota">Timbri nelle 48 ore dopo l'invio, contro la media del locale nelle stesse 48 ore.</p>
+      <p class="sezione-nota" id="nota-promo">Timbri nelle 48 ore dopo l'invio, contro la media del locale nelle stesse 48 ore.</p>
     </div>
     <div class="scheda" id="scheda-promo"></div>
   </section>
@@ -350,7 +376,7 @@ body.fuori .pannello-corpo{padding:20px}
 
   <footer>
     <span id="piede-agg"></span>
-    <span>Pagina privata — i numeri restano su questo dispositivo. · <b>v3</b></span>
+    <span>Pagina privata — i numeri restano su questo dispositivo. · <b>v4</b></span>
   </footer>
 </main>
 
@@ -401,7 +427,7 @@ function datiVuoti(){
 
 /* ===================== stato ===================== */
 let DATI = leggiSalvato() || datiVuoti();
-let STATO = { locale:"tutti", periodo:"mese", mese:null, da:null, a:null };
+let STATO = { locale:"tutti", periodo:"mese", mese:null, da:null, a:null, unita:"timbri" };
 
 /* ===================== periodo ===================== */
 function estremiDati(){
@@ -474,25 +500,80 @@ function nulla(cosa){
   return '<p class="insufficiente">'+esc(cosa)+'</p>';
 }
 
-/* ===================== grafico andamento ===================== */
+/* ===================== unità: timbri, punti, fette =====================
+   Ogni locale ha la sua forma di tessera. I numeri di forme diverse non si
+   sommano mai: 100 punti di Dock non sono 100 timbri. */
+const UNITA = {
+  timbri: {uno:"timbro", tanti:"timbri", Tanti:"Timbri", assegnati:"Timbri assegnati", f:false},
+  punti:  {uno:"punto",  tanti:"punti",  Tanti:"Punti",  assegnati:"Punti assegnati",  f:false},
+  pizza:  {uno:"fetta",  tanti:"fette",  Tanti:"Fette",  assegnati:"Fette assegnate",  f:true}
+};
+const ORDINE_UNITA = ["timbri","pizza","punti"];
+function formaDi(id){
+  const l = (DATI.locali||[]).find(x => x.id === id);
+  const f = l && l.forma;
+  return UNITA[f] ? f : "timbri";
+}
+function localiSelezionati(){
+  const tutti = DATI.locali || [];
+  return STATO.locale === "tutti" ? tutti : tutti.filter(l => l.id === STATO.locale);
+}
+// le unità presenti nella selezione, ognuna con i suoi locali
+function unitaSelezione(){
+  const m = {};
+  for(const l of localiSelezionati()){
+    const f = UNITA[l.forma] ? l.forma : "timbri";
+    (m[f] = m[f] || []).push(l);
+  }
+  const out = ORDINE_UNITA.filter(f => m[f]).map(f => ({forma:f, u:UNITA[f], locali:m[f]}));
+  return out.length ? out : [{forma:"timbri", u:UNITA.timbri, locali:[]}];
+}
+function sommaUnita(gs, forma){
+  return gs.reduce((s,g)=> s + (formaDi(g.locale_id) === forma ? (Number(g.timbri)||0) : 0), 0);
+}
+// «timbri», «punti», oppure «timbri o punti» quando la selezione li mescola
+function nomeMisto(){
+  const us = unitaSelezione();
+  return us.length === 1 ? us[0].u.tanti : us.map(x=>x.u.tanti).join(" o ");
+}
+function NomeMisto(){ const t = nomeMisto(); return t.charAt(0).toUpperCase() + t.slice(1); }
+
+/* ===================== grafico andamento =====================
+   15 novembre: colonne al posto della linea. Sopra ogni colonna il valore,
+   sotto il giorno della settimana; sabato e domenica in tinta; una linea
+   tratteggiata per la media dei giorni con movimenti. Una sola unità per
+   volta: se la selezione ha timbri e punti, si sceglie cosa vedere. */
+const GIORNI_SETT = ["dom","lun","mar","mer","gio","ven","sab"];
 let SERIE_CORRENTE = [];
-function serieAndamento(f){
+function unitaGrafico(){
+  const us = unitaSelezione();
+  if(!us.some(x => x.forma === STATO.unita)) STATO.unita = us[0].forma;
+  return us.find(x => x.forma === STATO.unita);
+}
+function serieAndamento(f, forma){
   const gs = giorniFiltrati(f);
   const span = (daIso(f.a) - daIso(f.da)) / 86400000;
+  const vuoto = (k, et, lunga, d) => ({chiave:k, etichetta:et, lunga:lunga, data:d, val:0, tessere:0, premi:0});
+  const somma = (p, g) => {
+    if(formaDi(g.locale_id) === forma) p.val += Number(g.timbri)||0;
+    p.tessere += Number(g.tessere)||0; p.premi += Number(g.premi)||0;
+  };
   if(span > 92){
-    // oltre tre mesi: raggruppa per mese, altrimenti le colonne diventano illeggibili
+    // oltre tre mesi: per mese, altrimenti le colonne diventano fili
     const m = new Map();
     for(const g of gs){
       const k = g.d.slice(0,7);
-      if(!m.has(k)) m.set(k, {chiave:k, etichetta: MESI_BREVI[+k.slice(5,7)-1]+" "+k.slice(2,4), lunga: MESI[+k.slice(5,7)-1]+" "+k.slice(0,4), val:0});
-      m.get(k).val += Number(g.timbri)||0;
+      if(!m.has(k)) m.set(k, vuoto(k, MESI_BREVI[+k.slice(5,7)-1]+" "+k.slice(2,4), MESI[+k.slice(5,7)-1]+" "+k.slice(0,4), null));
+      somma(m.get(k), g);
     }
     return {punti:[...m.values()].sort((a,b)=>a.chiave<b.chiave?-1:1), passo:"mese"};
   }
   const m = new Map();
-  for(let d = daIso(f.da); d <= daIso(f.a); d.setUTCDate(d.getUTCDate()+1))
-    m.set(iso(d), {chiave:iso(d), etichetta:gg(iso(d)), lunga:ggLungo(iso(d)), val:0});
-  for(const g of gs){ if(m.has(g.d)) m.get(g.d).val += Number(g.timbri)||0; }
+  for(let d = daIso(f.da); d <= daIso(f.a); d.setUTCDate(d.getUTCDate()+1)){
+    const k = iso(d);
+    m.set(k, vuoto(k, gg(k), GIORNI_SETT[d.getUTCDay()]+" "+ggLungo(k), new Date(d)));
+  }
+  for(const g of gs){ if(m.has(g.d)) somma(m.get(g.d), g); }
   return {punti:[...m.values()], passo:"giorno"};
 }
 function ticks(max){
@@ -503,80 +584,109 @@ function ticks(max){
   if(out[out.length-1] < max) out.push(out[out.length-1]+passo);
   return out;
 }
+function disegnaSelettoreUnita(){
+  const c = $("#sel-unita"); if(!c) return;
+  const us = unitaSelezione();
+  c.hidden = us.length < 2;
+  if(us.length < 2){ c.innerHTML = ""; return; }
+  const att = unitaGrafico().forma;
+  c.innerHTML = us.map(x=>'<button type="button" data-u="'+x.forma+'" aria-pressed="'+(x.forma===att)+'">'+esc(x.u.Tanti)+'</button>').join("");
+  c.querySelectorAll("button").forEach(b=> b.addEventListener("click", ()=>{ STATO.unita = b.dataset.u; disegnaAndamento(); }));
+}
 function disegnaAndamento(){
   const box = $("#box-andamento");
   const sugg = $("#sugg-andamento");
   const f = finestraAttiva();
-  const s = serieAndamento(f);
+  const un = unitaGrafico();
+  disegnaSelettoreUnita();
+  const s = serieAndamento(f, un.forma);
   SERIE_CORRENTE = s.punti;
   const L = box.clientWidth || 700;
-  const H = 240, ml = 42, mr = 14, mt = 14, mb = 28;
+  const H = 250, ml = 38, mr = 10, mt = 22, mb = s.passo === "giorno" ? 40 : 28;
   const iw = Math.max(60, L - ml - mr), ih = H - mt - mb;
   const n = s.punti.length;
   const maxV = Math.max(1, ...s.punti.map(p=>p.val));
   const tk = ticks(maxV), top = tk[tk.length-1];
-  const x = i => n === 1 ? ml + iw/2 : ml + (i/(n-1))*iw;
+  const slot = iw / Math.max(1,n);
+  const bw = Math.max(2, Math.min(38, slot*0.66));
+  const cx = i => ml + slot*(i+0.5);
   const y = v => mt + ih - (v/top)*ih;
 
-  let griglia = "", etY = "";
+  let fondo = "", griglia = "", etY = "", colonne = "", valori = "", etX = "";
+  // weekend in tinta, solo per giorni
+  if(s.passo === "giorno"){
+    s.punti.forEach((p,i)=>{
+      const dw = p.data.getUTCDay();
+      if(dw === 0 || dw === 6)
+        fondo += '<rect x="'+(ml+slot*i).toFixed(1)+'" y="'+mt+'" width="'+slot.toFixed(1)+'" height="'+ih+'" fill="var(--surface-2)" opacity="0.7"/>';
+    });
+  }
   for(const t of tk){
     griglia += '<line x1="'+ml+'" y1="'+y(t).toFixed(1)+'" x2="'+(ml+iw)+'" y2="'+y(t).toFixed(1)+'" stroke="var(--line)" stroke-width="1"/>';
-    etY += '<text x="'+(ml-9)+'" y="'+(y(t)+4).toFixed(1)+'" text-anchor="end" font-size="11" fill="var(--ink-3)" style="font-variant-numeric:tabular-nums">'+num(t)+'</text>';
+    etY += '<text x="'+(ml-8)+'" y="'+(y(t)+4).toFixed(1)+'" text-anchor="end" font-size="11" fill="var(--ink-3)" style="font-variant-numeric:tabular-nums">'+num(t)+'</text>';
   }
-  const linea = s.punti.map((p,i)=> (i?"L":"M")+x(i).toFixed(1)+" "+y(p.val).toFixed(1)).join(" ");
-  const area  = n ? linea+" L"+x(n-1).toFixed(1)+" "+(mt+ih)+" L"+x(0).toFixed(1)+" "+(mt+ih)+" Z" : "";
-
-  // etichette X: al massimo 7, sempre la prima e l'ultima
-  const passoX = Math.max(1, Math.ceil(n/7));
-  let etX = "";
+  const scriviValori = n <= 31;
   s.punti.forEach((p,i)=>{
-    if(i % passoX === 0 || i === n-1){
-      etX += '<text x="'+x(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11" fill="var(--ink-3)">'+esc(p.etichetta)+'</text>';
+    if(p.val > 0){
+      const h = Math.max(2, ih - (y(p.val) - mt));
+      colonne += '<rect class="col" data-i="'+i+'" x="'+(cx(i)-bw/2).toFixed(1)+'" y="'+(mt+ih-h).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="'+Math.min(4,bw/3).toFixed(1)+'" fill="var(--accent)"/>';
+      if(scriviValori)
+        valori += '<text x="'+cx(i).toFixed(1)+'" y="'+(y(p.val)-6).toFixed(1)+'" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--ink)" style="font-variant-numeric:tabular-nums">'+num(p.val)+'</text>';
     }
   });
-  // punto finale evidenziato + etichetta diretta sul massimo
-  const iMax = s.punti.reduce((b,p,i,a)=> p.val > a[b].val ? i : b, 0);
-  let marcatori = "";
-  if(n){
-    marcatori += '<circle cx="'+x(n-1).toFixed(1)+'" cy="'+y(s.punti[n-1].val).toFixed(1)+'" r="4.5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>';
-    if(iMax !== n-1 && maxV > 0)
-      marcatori += '<circle cx="'+x(iMax).toFixed(1)+'" cy="'+y(s.punti[iMax].val).toFixed(1)+'" r="4" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>';
-    if(maxV > 0)
-      marcatori += '<text x="'+x(iMax).toFixed(1)+'" y="'+(y(maxV)-11).toFixed(1)+'" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">'+num(maxV)+'</text>';
+  // etichette sotto: per giorno «ven / 13», al massimo una ogni tanto
+  const passoX = Math.max(1, Math.ceil(n / (L < 520 ? 7 : 16)));
+  s.punti.forEach((p,i)=>{
+    if(i % passoX !== 0 && i !== n-1) return;
+    if(s.passo === "giorno"){
+      const d = p.data;
+      etX += '<text x="'+cx(i).toFixed(1)+'" y="'+(H-22)+'" text-anchor="middle" font-size="10.5" fill="var(--ink-3)">'+GIORNI_SETT[d.getUTCDay()]+'</text>'+
+             '<text x="'+cx(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11" fill="var(--ink-2)" style="font-variant-numeric:tabular-nums">'+d.getUTCDate()+(d.getUTCDate()===1||i===0?" "+MESI_BREVI[d.getUTCMonth()]:"")+'</text>';
+    }else{
+      etX += '<text x="'+cx(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11" fill="var(--ink-3)">'+esc(p.etichetta)+'</text>';
+    }
+  });
+  // media dei giorni con movimenti
+  const attivi = s.punti.filter(p=>p.val>0);
+  const media = attivi.length ? attivi.reduce((a,p)=>a+p.val,0)/attivi.length : 0;
+  let lineaMedia = "";
+  if(attivi.length > 1){
+    lineaMedia = '<line x1="'+ml+'" y1="'+y(media).toFixed(1)+'" x2="'+(ml+iw)+'" y2="'+y(media).toFixed(1)+'" stroke="var(--ink-3)" stroke-width="1" stroke-dasharray="4 4"/>'+
+      '<text x="'+(ml+iw)+'" y="'+(y(media)-5).toFixed(1)+'" text-anchor="end" font-size="11" fill="var(--ink-3)">media '+dec(media,1)+'</text>';
   }
 
   box.innerHTML =
-    '<svg viewBox="0 0 '+L+' '+H+'" width="'+L+'" height="'+H+'" role="img" aria-label="Timbri per '+s.passo+'">'+
-      griglia + etY + etX +
-      (n>1 ? '<path d="'+area+'" fill="var(--accent)" opacity="0.10"/>' : '')+
-      (n>1 ? '<path d="'+linea+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' : '')+
-      (n===1 ? '<circle cx="'+x(0)+'" cy="'+y(s.punti[0].val)+'" r="5" fill="var(--accent)"/>' : '')+
-      '<line id="mirino" x1="0" y1="'+mt+'" x2="0" y2="'+(mt+ih)+'" stroke="var(--line-forte)" stroke-width="1" opacity="0"/>'+
-      marcatori +
+    '<svg viewBox="0 0 '+L+' '+H+'" width="'+L+'" height="'+H+'" role="img" aria-label="'+esc(un.u.Tanti)+' per '+s.passo+'">'+
+      fondo + griglia + etY + etX + colonne + lineaMedia + valori +
+      '<rect id="evidenza" x="0" y="'+mt+'" width="'+slot.toFixed(1)+'" height="'+ih+'" fill="var(--ink)" opacity="0"/>'+
     '</svg>';
   box.appendChild(sugg);
 
-  const svg = box.querySelector("svg"), mirino = box.querySelector("#mirino");
+  const svg = box.querySelector("svg"), evid = box.querySelector("#evidenza");
   function muovi(ev){
     const r = svg.getBoundingClientRect();
     const px = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
     const sx = px * (L / r.width);
-    let i = n === 1 ? 0 : Math.round(((sx - ml)/iw) * (n-1));
+    let i = Math.floor((sx - ml) / slot);
     i = Math.max(0, Math.min(n-1, i));
-    const p = s.punti[i];
-    mirino.setAttribute("x1", x(i)); mirino.setAttribute("x2", x(i)); mirino.setAttribute("opacity","1");
-    sugg.innerHTML = '<b>'+num(p.val)+'</b> timbri<br>'+esc(p.lunga);
-    sugg.style.left = (x(i) * (r.width / L)) + "px";
-    sugg.style.top  = (y(p.val) * (r.height / H)) + "px";
+    const p = s.punti[i]; if(!p) return;
+    evid.setAttribute("x", (ml+slot*i).toFixed(1)); evid.setAttribute("opacity","0.05");
+    let t = '<b>'+num(p.val)+'</b> '+(p.val===1?un.u.uno:un.u.tanti);
+    if(p.tessere) t += ' · '+num(p.tessere)+(p.tessere===1?' tessera nuova':' tessere nuove');
+    if(p.premi)   t += ' · '+num(p.premi)+(p.premi===1?' premio':' premi');
+    sugg.innerHTML = t+'<br>'+esc(p.lunga);
+    sugg.style.left = (cx(i) * (r.width / L)) + "px";
+    sugg.style.top  = (y(Math.max(p.val, top*0.15)) * (r.height / H)) + "px";
     sugg.style.opacity = "1";
   }
   svg.addEventListener("mousemove", muovi);
   svg.addEventListener("touchmove", function(e){ muovi(e); }, {passive:true});
-  svg.addEventListener("mouseleave", function(){ sugg.style.opacity="0"; mirino.setAttribute("opacity","0"); });
+  svg.addEventListener("mouseleave", function(){ sugg.style.opacity="0"; evid.setAttribute("opacity","0"); });
 
-  $("#tab-andamento").innerHTML = tabella([s.passo==="mese"?"Mese":"Giorno","Timbri"],
-    s.punti.map(p=>[esc(p.lunga), num(p.val)]));
-  $("#nota-andamento").textContent = s.passo === "mese" ? "Timbri per mese." : "Timbri per giorno.";
+  $("#tab-andamento").innerHTML = tabella([s.passo==="mese"?"Mese":"Giorno", un.u.Tanti, "Tessere nuove", "Premi ritirati"],
+    s.punti.map(p=>[esc(p.lunga), num(p.val), num(p.tessere), num(p.premi)]));
+  $("#nota-andamento").textContent = (s.passo === "mese" ? un.u.Tanti+" per mese" : un.u.Tanti+" per giorno") +
+    (unitaSelezione().length > 1 ? " · solo i locali a "+un.u.tanti : "") + ".";
   $("#titolo-andamento").textContent = "Andamento";
 }
 
@@ -597,14 +707,20 @@ function render(){
 
   $("#nota-periodo").textContent = f.etichetta + (STATO.locale === "tutti" ? " · tutti i locali" : " · " + (DATI.locali.find(l=>l.id===STATO.locale)||{}).nome);
 
-  // eroe
-  const timbri = somma(gs,"timbri");
-  $("#eroe-timbri").textContent = num(timbri);
+  // eroe: un numero per unità (timbri, fette, punti), mai sommati fra loro
+  const us = unitaSelezione();
+  const misti = us.length > 1;
+  $("#eroe-numeri").innerHTML = us.map((x,i)=>{
+    const dove = misti ? '<div class="eroe-dove">'+esc(x.locali.map(l=>l.nome).join(", "))+'</div>' : '';
+    return '<div class="'+(i?"secondo":"")+'"><div class="eroe-et">'+esc(x.u.assegnati)+'</div>'+
+           '<div class="eroe-num">'+num(sommaUnita(gs, x.forma))+'</div>'+dove+'</div>';
+  }).join("");
   const giorniConAttivita = gs.filter(g=>g.timbri>0).length;
-  $("#eroe-sotto").textContent = timbri === 0
-    ? "Nessun timbro in questo periodo."
-    : "Su " + num(giorniConAttivita) + (giorniConAttivita===1?" giornata":" giornate") + " con almeno un timbro" +
-      (giorniConAttivita>1 ? ", in media " + dec(timbri/giorniConAttivita,1) + " al giorno." : ".");
+  const principale = sommaUnita(gs, us[0].forma);
+  $("#eroe-sotto").textContent = giorniConAttivita === 0
+    ? "Nessun movimento in questo periodo."
+    : "Su " + num(giorniConAttivita) + (giorniConAttivita===1?" giornata":" giornate") + " con almeno un movimento" +
+      (!misti && giorniConAttivita>1 ? ", in media " + dec(principale/giorniConAttivita,1) + " " + us[0].u.tanti + " al giorno." : ".");
 
   // piastrelle periodo
   const fin = f.chiave ? (b.finestre||{})[f.chiave] : null;
@@ -625,6 +741,24 @@ function render(){
     p += piastrella("Locali attivi", num(DATI.generale.locali_attivi) + " <span style=\"font-size:16px;color:var(--ink-3);font-weight:500\">su " + num(DATI.generale.locali_totali) + "</span>", "hanno dato almeno un timbro");
   }
   $("#piastrelle-periodo").innerHTML = p;
+
+  // premi da ritirare: lo stato di adesso, non il periodo
+  const conPremi = localiSelezionati();
+  if(!conPremi.length || !conPremi.some(l => l.premi_pronti)){
+    $("#premi-pronti").innerHTML = nulla(conPremi.length
+      ? "Per vederli serve l'ultima versione dei numeri: premi «Aggiorna adesso»."
+      : "Nessun locale.");
+  }else{
+    $("#premi-pronti").innerHTML = conPremi.map(l=>{
+      const pp = l.premi_pronti || {premi:0, tessere:0};
+      const premi = Number(pp.premi)||0, tess = Number(pp.tessere)||0;
+      const cosa = (l.premio ? "Premio: "+l.premio : "") +
+        (tess > 0 ? (l.premio?" · ":"") + num(tess) + (tess===1?" tessera":" tessere") + " con il premio pronto" : (l.premio?"":"Nessun premio in attesa"));
+      return '<div class="premio-riga"><span class="premio-nome">'+esc(l.nome)+'</span>'+
+        '<span class="premio-val'+(premi?"":" zero")+'">'+num(premi)+'<small>'+(premi===1?"premio":"premi")+'</small></span>'+
+        '<span class="premio-cosa">'+esc(cosa)+'</span></div>';
+    }).join("");
+  }
 
   // notifiche
   const nt = sommaNotifiche(gs);
@@ -686,6 +820,8 @@ function render(){
   }
 
   // famiglia
+  $("#et-famiglia").textContent = NomeMisto() + " a settimana per tessera";
+  $("#nota-promo").textContent = NomeMisto() + " nelle 48 ore dopo l'invio, contro la media del locale nelle stesse 48 ore.";
   const fa = st.famiglia || {};
   const totTess = (fa.condivise||0) + (fa.singole||0);
   if(totTess < 1){
@@ -706,7 +842,7 @@ function render(){
       {nome:"Tessera di famiglia", val: fa.timbri_sett_famiglia, testo: dec(fa.timbri_sett_famiglia,1)},
       {nome:"Tessera singola",     val: fa.timbri_sett_singolo,  testo: dec(fa.timbri_sett_singolo,1)}
     ]);
-    $("#tab-famiglia").innerHTML = tabella(["Tipo di tessera","Numero","Timbri a settimana","Arriva al premio"], [
+    $("#tab-famiglia").innerHTML = tabella(["Tipo di tessera","Numero",NomeMisto()+" a settimana","Arriva al premio"], [
       ["Condivisa in famiglia", num(fa.condivise), dec(fa.timbri_sett_famiglia,1), pct(fa.premi_pct_famiglia)],
       ["Singola",              num(fa.singole),   dec(fa.timbri_sett_singolo,1),  pct(fa.premi_pct_singolo)]
     ]);
@@ -725,7 +861,7 @@ function render(){
           '<span class="barra-val">'+num(x.timbri_48h)+(delta!=null?' <span style="font-weight:500;font-size:12.5px;color:var(--ink-3)">('+(delta>=0?"+":"")+Math.round(delta)+'%)</span>':'')+'</span></div>';
       }).join("")+'</div>'+
       '<details class="tab"><summary>Vedi i valori in tabella</summary><div class="tab-wrap">'+
-        tabella(["Promozione","Data","Inviata a","Timbri in 48 h","Media del locale","Differenza"],
+        tabella(["Promozione","Data","Inviata a",NomeMisto()+" in 48 h","Media del locale","Differenza"],
           pr.map(x=>[esc(x.nome), ggLungo(x.data), num(x.destinatari), num(x.timbri_48h), num(x.media_48h),
             x.media_48h>0 ? ((x.timbri_48h/x.media_48h-1)*100>=0?"+":"")+Math.round((x.timbri_48h/x.media_48h-1)*100)+"%" : "—"]))+
       '</div></details>';
@@ -798,6 +934,7 @@ function disegnaStato(modo, dati){
   const c = $("#corpo-stato");
   // Fuori o dentro: prima dell'accesso la pagina mostra solo l'ingresso.
   document.body.classList.toggle("fuori", modo !== "dentro");
+  if(modo === "dentro") requestAnimationFrame(()=> disegnaAndamento());
 
   // Con la pagina ancora vuota un riquadro in fondo non lo vede nessuno:
   // finché non si è entrati sta in cima, poi torna in coda.
