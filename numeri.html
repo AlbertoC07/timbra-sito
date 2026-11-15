@@ -652,7 +652,7 @@ function disegnaAndamento(){
   let lineaMedia = "";
   if(attivi.length > 1){
     lineaMedia = '<line x1="'+ml+'" y1="'+y(media).toFixed(1)+'" x2="'+(ml+iw)+'" y2="'+y(media).toFixed(1)+'" stroke="var(--ink-3)" stroke-width="1" stroke-dasharray="4 4"/>'+
-      '<text x="'+(ml+iw)+'" y="'+(y(media)-5).toFixed(1)+'" text-anchor="end" font-size="11" fill="var(--ink-3)">media '+dec(media,1)+'</text>';
+      '';   // la cifra della media sta nella nota sopra il grafico: dentro finiva sopra le colonne
   }
 
   box.innerHTML =
@@ -686,7 +686,8 @@ function disegnaAndamento(){
   $("#tab-andamento").innerHTML = tabella([s.passo==="mese"?"Mese":"Giorno", un.u.Tanti, "Tessere nuove", "Premi ritirati"],
     s.punti.map(p=>[esc(p.lunga), num(p.val), num(p.tessere), num(p.premi)]));
   $("#nota-andamento").textContent = (s.passo === "mese" ? un.u.Tanti+" per mese" : un.u.Tanti+" per giorno") +
-    (unitaSelezione().length > 1 ? " · solo i locali a "+un.u.tanti : "") + ".";
+    (unitaSelezione().length > 1 ? " · solo i locali a "+un.u.tanti : "") +
+    (attivi.length > 1 ? " · tratteggio: media di "+dec(media,1)+" nei giorni con movimenti" : "") + ".";
   $("#titolo-andamento").textContent = "Andamento";
 }
 
